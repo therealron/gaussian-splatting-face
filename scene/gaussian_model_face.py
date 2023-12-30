@@ -23,8 +23,7 @@ from utils.general_utils import strip_symmetric, build_scaling_rotation
 import igl
 
 class FullyConnectedMLP(nn.Module):
-    def __init__(self, input_size, 
-                        rot_size=4, 
+    def __init__(self, rot_size=4, 
                         scale_size=3, 
                         xyz_size= 3, 
                         hidden_size=256, 
@@ -42,7 +41,9 @@ class FullyConnectedMLP(nn.Module):
         self.expr_dim = expr_dim
         layers = []
         output_size = rot_size + scale_size + xyz_size
+        input_size = 3 + embedding_dim*2*3 + expr_dim
 
+        self.input_size = input_size
         # Input layer
         layers.append(nn.Linear(input_size, hidden_size))
         layers.append(nn.ReLU())
@@ -74,9 +75,11 @@ class FullyConnectedMLP(nn.Module):
     def forward(self, canonical_template, expr_code):
         """
         canonical_xyz: (N,3)
-        expr_code: (B, 100)
+        expr_code: (1, 100)
 
         """
+        print("self.input_size = ",self.input_size)
+        
         
         batch_size = expr_code.shape[0]
         # canonical_xyz_features is of shape (N, num_pos_encodings)
@@ -93,6 +96,7 @@ class FullyConnectedMLP(nn.Module):
         x = torch.cat([canonical_xyz_features,expr_code ], dim=2)
         # x will be of shape (B*N, expr_code+num_pose_encodings)
         x = x.view(batch_size, -1)
+        print("x.shape = ",x.shape)
 
         x = self.layers(x)
         del_rot = self.rot_head(x)
@@ -144,9 +148,7 @@ class GaussianModelFace:
         self.optimizer = None
         self.percent_dense = 0
         self.spatial_lr_scale = 0
-        
         self.delta_mlp_model = None
-
         self.setup_functions()
         # self.
 
@@ -219,6 +221,7 @@ class GaussianModelFace:
             self.active_sh_degree += 1
 
     def create_from_pcd(self, pcd : BasicPointCloud, spatial_lr_scale : float):
+        raise NotImplementedError
         self.spatial_lr_scale = spatial_lr_scale
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
@@ -241,11 +244,12 @@ class GaussianModelFace:
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
 
     def create_from_flame(self,  spatial_lr_scale : float, flame_canonical_path: str = '/content/gaussian-splatting-face/data/flame/canonical.obj'):
         
         self.spatial_lr_scale = spatial_lr_scale
+        assert os.path.exists(flame_canonical_path), flame_canonical_path+ " does not exist!"
         v, vt, _, faces, ftc, _ = igl.read_obj(flame_canonical_path)
         
         fused_point_cloud = torch.tensor(v).float().cuda()
@@ -270,14 +274,33 @@ class GaussianModelFace:
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
         self.delta_mlp_model = FullyConnectedMLP()
-        self.
+
+    def generate_dynamic_gaussians(self, tracked_mesh, flame_expr_params):
+        """
+        in each iteration just pass a single mesh
+        tracked_mesh: (N,3)
+        flame_expr_params: (1,100)
+        """
+
+        assert tracked_mesh.shape[0] == self._canonical_xyz.shape[0] # assert that they have the same # vertices
+        
+        assert flame_expr_params.shape[0] == 1 and flame_expr_params.shape[1]==100
+        
+        del_u, del_rot, del_scale = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
+        self._xyz = tracked_mesh + del_u[0]
+        self._rotation = self._rotation + del_rot[0]
+        self._scaling = self._scaling + del_scale[0]
+
+
+
+        
 
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
-        self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
-        self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
+        self.xyz_gradient_accum = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
+        self.denom = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
 
         l = [
             {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
@@ -319,8 +342,8 @@ class GaussianModelFace:
     def save_ply(self, path):
         mkdir_p(os.path.dirname(path))
 
-        xyz = self._xyz.detach().cpu().numpy()
-        normals = np.zeros_like(xyz)
+        canonical_xyz = self.canonical_xyz.detach().cpu().numpy()
+        normals = np.zeros_like(canonical_xyz)
         f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
         f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
         opacities = self._opacity.detach().cpu().numpy()
@@ -334,6 +357,13 @@ class GaussianModelFace:
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
+    
+    def save_model(self, path)
+        mkdir_p(os.path.dirname(path))
+        model = self.delta_mlp_model
+        torch.save(model.state_dict(), path)
+        print("Saved Checkpoint to ",path)
+
 
     def reset_opacity(self):
         opacities_new = inverse_sigmoid(torch.min(self.get_opacity, torch.ones_like(self.get_opacity)*0.01))
@@ -417,6 +447,7 @@ class GaussianModelFace:
         return optimizable_tensors
 
     def prune_points(self, mask):
+        raise NotImplementedError
         valid_points_mask = ~mask
         optimizable_tensors = self._prune_optimizer(valid_points_mask)
 
@@ -455,6 +486,7 @@ class GaussianModelFace:
         return optimizable_tensors
 
     def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation):
+        raise NotImplementedError
         d = {"xyz": new_xyz,
         "f_dc": new_features_dc,
         "f_rest": new_features_rest,
@@ -470,12 +502,13 @@ class GaussianModelFace:
         self._scaling = optimizable_tensors["scaling"]
         self._rotation = optimizable_tensors["rotation"]
 
-        self.xyz_gradient_accum = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
-        self.denom = torch.zeros((self.get_xyz.shape[0], 1), device="cuda")
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.xyz_gradient_accum = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
+        self.denom = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
+        self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
 
     def densify_and_split(self, grads, grad_threshold, scene_extent, N=2):
-        n_init_points = self.get_xyz.shape[0]
+        raise NotImplementedError
+        n_init_points = self.get_canonical_xyz.shape[0]
         # Extract points that satisfy the gradient condition
         padded_grad = torch.zeros((n_init_points), device="cuda")
         padded_grad[:grads.shape[0]] = grads.squeeze()
@@ -500,6 +533,7 @@ class GaussianModelFace:
         self.prune_points(prune_filter)
 
     def densify_and_clone(self, grads, grad_threshold, scene_extent):
+        raise NotImplementedError
         # Extract points that satisfy the gradient condition
         selected_pts_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
         selected_pts_mask = torch.logical_and(selected_pts_mask,
@@ -515,6 +549,7 @@ class GaussianModelFace:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
     def densify_and_prune(self, max_grad, min_opacity, extent, max_screen_size):
+        raise NotImplementedError
         grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0
 
@@ -531,5 +566,6 @@ class GaussianModelFace:
         torch.cuda.empty_cache()
 
     def add_densification_stats(self, viewspace_point_tensor, update_filter):
+        raise NotImplementedError
         self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.denom[update_filter] += 1
