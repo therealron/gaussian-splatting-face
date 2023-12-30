@@ -10,11 +10,13 @@
 #
 
 import os
+import igl
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim
 from gaussian_renderer import render, network_gui
 import sys
+import numpy as np
 from scene import Scene, GaussianModelFace
 from utils.general_utils import safe_state
 from utils.graphics_utils import getProjectionMatrix
@@ -30,15 +32,23 @@ except ImportError:
     TENSORBOARD_FOUND = False
 
 class ViewCamera:
-    FoVx = 0.2225811228028787
-    FoVy = 0.2225811228028787
-    image_height = 512
-    image_height = 512
-    world_view_transform = None
-    full_proj_transform = None
-    zfar = 100.0
-    znear = 0.01
-    camera_center = None
+  def __init__(self):
+    self.FoVx = 0.2225811228028787
+    self.FoVy = 0.2225811228028787
+    self.image_height = 512
+    self.image_height = 512
+    self.c2w = np.array([[0.9994248320452279,-0.03332750212378886,0.0062736968987590225,-0.016231912076032987],
+            [-0.03097184270523503,-0.9723530145588566,-0.23145305663677745,0.385889258502049],
+            [0.013814000838468536,0.23112562731765812,-0.9728259921280814,1.7591296183106164],
+            [0.0,0.0,0.0,1.0]
+          ])
+    self.w2c = np.linalg.inv(self.c2w)
+    self.world_view_transform = torch.tensor(self.w2c)
+    
+    self.zfar = 100.0
+    self.znear = 0.01
+    self.camera_center = torch.tensor(self.c2w[:3, 3])
+    self.full_proj_transform = getProjectionMatrix(self.znear, self.zfar, self.FoVx, self.FoVy)
 
 
 
@@ -78,10 +88,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
     viewpoint_stack = None
     ema_loss_for_log = 0.0
-    print()
-    expr = read_expr('/workspaces/gaussian-splatting-face/scene/justin/expr/00000.txt')
-    tracked_mesh, _, _, _, _, _ = igl.read_obj('/workspaces/gaussian-splatting-face/scene/justin/mesh_0.obj')
+    print()# /content/gaussian-splatting-face
+    expr = read_expr('/content/gaussian-splatting-face/scene/justin/flame/expr/00000.txt')
+    tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh = torch.tensor(tracked_mesh)
+    tracked_mesh = tracked_mesh.cuda()
+
+
+
 
 
 
@@ -118,7 +132,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        viewpoint_cam = ''
+        viewpoint_cam = ViewCamera()
 
 
 

@@ -63,8 +63,8 @@ class FullyConnectedMLP(nn.Module):
         self.scale_head = nn.Linear(intermediate_size, scale_size)
         self.xyz_head = nn.Linear(intermediate_size, xyz_size)
 
-    @static_method
-    def positional_encoding(x, L):
+    
+    def positional_encoding(self,x, L):
         out = [x]
 
         for j in range(L):
@@ -83,19 +83,20 @@ class FullyConnectedMLP(nn.Module):
         
         batch_size = expr_code.shape[0]
         # canonical_xyz_features is of shape (N, num_pos_encodings)
-        canonical_xyz_features = positional_encoding(canonical_template, self.embedding_dim)
-        canonical_xyz_features = canonical.unsqueeze(0)
+        canonical_xyz_features = self.positional_encoding(canonical_template, self.embedding_dim)
+        canonical_xyz_features = canonical_xyz_features.unsqueeze(0)
         # now it is of shape (B, N, num_pos_encodings)
         canonical_xyz_features = canonical_xyz_features.repeat(batch_size, 1, 1)
 
         expr_code = expr_code.unsqueeze(1)
         #of shape (B,N, expr_code)
-        expr_code = expr.repeat(1, canonical_xyz_features.shape[1], 1)
+        expr_code = expr_code.repeat(1, canonical_xyz_features.shape[1], 1)
+        expr_code = expr_code.cuda()
 
         # x will be of shape (B, N, expr_code+num_pose_encodings)
-        x = torch.cat([canonical_xyz_features,expr_code ], dim=2)
+        x = torch.cat([canonical_xyz_features.cuda(),expr_code.cuda() ], dim=2)
         # x will be of shape (B*N, expr_code+num_pose_encodings)
-        x = x.view(batch_size, -1)
+        x = x.view(-1, self.input_size )
         print("x.shape = ",x.shape)
 
         x = self.layers(x)
@@ -108,7 +109,7 @@ class FullyConnectedMLP(nn.Module):
         del_xyz = self.xyz_head(x)
         del_xyz = del_xyz.view(batch_size, -1, self.xyz_size) # eg. (B,N,3)
 
-        return del_xyz, del_scale, del_rot
+        return del_xyz.to(torch.float32), del_scale, del_rot
 
 
 
@@ -196,7 +197,7 @@ class GaussianModelFace:
     
     @property
     def get_xyz(self):
-        return self._xyz
+        return self._xyz.to(torch.float32)
     
 
     @property
@@ -246,7 +247,7 @@ class GaussianModelFace:
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
 
-    def create_from_flame(self,  spatial_lr_scale : float, flame_canonical_path: str = '/content/gaussian-splatting-face/data/flame/canonical.obj'):
+    def create_from_flame(self,  spatial_lr_scale : float, flame_canonical_path: str = '/content/gaussian-splatting-face/scene/justin/canonical.obj'):
         
         self.spatial_lr_scale = spatial_lr_scale
         assert os.path.exists(flame_canonical_path), flame_canonical_path+ " does not exist!"
@@ -276,6 +277,7 @@ class GaussianModelFace:
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
         self.delta_mlp_model = FullyConnectedMLP()
+        self.delta_mlp_model = self.delta_mlp_model.cuda()
 
     def generate_dynamic_gaussians(self, tracked_mesh, flame_expr_params):
         """
@@ -288,7 +290,10 @@ class GaussianModelFace:
         
         assert flame_expr_params.shape[0] == 1 and flame_expr_params.shape[1]==100
         
-        del_u, del_rot, del_scale = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
+        del_u, del_scale, del_rot = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
+        print("del_u.shape = ",del_u.shape)
+        print("del_rot.shape = ",del_rot.shape)
+        print("del_scale.shape = ",del_scale.shape)
         self._xyz = tracked_mesh + del_u[0]
         self._rotation = self._rotation + del_rot[0]
         self._scaling = self._scaling + del_scale[0]
@@ -358,7 +363,7 @@ class GaussianModelFace:
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
     
-    def save_model(self, path)
+    def save_model(self, path):
         mkdir_p(os.path.dirname(path))
         model = self.delta_mlp_model
         torch.save(model.state_dict(), path)
