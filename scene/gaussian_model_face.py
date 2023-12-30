@@ -108,7 +108,7 @@ class FullyConnectedMLP(nn.Module):
         
         del_xyz = self.xyz_head(x)
         del_xyz = del_xyz.view(batch_size, -1, self.xyz_size) # eg. (B,N,3)
-
+        
         return del_xyz.to(torch.float32), del_scale, del_rot
 
 
@@ -291,12 +291,22 @@ class GaussianModelFace:
         assert flame_expr_params.shape[0] == 1 and flame_expr_params.shape[1]==100
         
         del_u, del_scale, del_rot = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
-        print("del_u.shape = ",del_u.shape)
-        print("del_rot.shape = ",del_rot.shape)
-        print("del_scale.shape = ",del_scale.shape)
+        # print("del_u.shape = ",del_u.shape)
+        # print("del_rot.shape = ",del_rot.shape)
+        # print("del_scale.shape = ",del_scale.shape)
+
+        print("del_u.dtype = ",del_u.dtype)
+        print("del_scale.dtype = ",del_scale.dtype)
+        print("del_rot.dtype = ",del_rot.dtype)
+        import pdb; pdb.set_trace();
         self._xyz = tracked_mesh + del_u[0]
         self._rotation = self._rotation + del_rot[0]
         self._scaling = self._scaling + del_scale[0]
+
+        print("del_u.dtype = ",del_u.dtype)
+        print("del_scale.dtype = ",del_scale.dtype)
+        print("del_rot.dtype = ",del_rot.dtype)
+        print("self._xyz.dtype = ",self._xyz.dtype)
 
 
 

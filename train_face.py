@@ -43,11 +43,11 @@ class ViewCamera:
             [0.0,0.0,0.0,1.0]
           ])
     self.w2c = np.linalg.inv(self.c2w)
-    self.world_view_transform = torch.tensor(self.w2c)
+    self.world_view_transform = torch.tensor(self.w2c, dtype=torch.float32)
     
     self.zfar = 100.0
     self.znear = 0.01
-    self.camera_center = torch.tensor(self.c2w[:3, 3])
+    self.camera_center = torch.tensor(self.c2w[:3, 3], dtype=torch.float32)
     self.full_proj_transform = getProjectionMatrix(self.znear, self.zfar, self.FoVx, self.FoVy)
 
 
@@ -91,7 +91,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     print()# /content/gaussian-splatting-face
     expr = read_expr('/content/gaussian-splatting-face/scene/justin/flame/expr/00000.txt')
     tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
-    tracked_mesh = torch.tensor(tracked_mesh)
+    tracked_mesh = torch.tensor(tracked_mesh, dtype=torch.float32)
     tracked_mesh = tracked_mesh.cuda()
 
 
