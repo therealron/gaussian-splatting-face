@@ -23,12 +23,23 @@ from utils.general_utils import strip_symmetric, build_scaling_rotation
 import igl
 
 class FullyConnectedMLP(nn.Module):
-    def __init__(self, input_size, rot_size=4, scale_size=3, xyz_size= 3, hidden_size=256, depth=5):
+    def __init__(self, input_size, 
+                        rot_size=4, 
+                        scale_size=3, 
+                        xyz_size= 3, 
+                        hidden_size=256, 
+                        depth=5,  
+                        intermediate_size=128,
+                        embedding_dim = 10,
+                        expr_dim = 100):
 
         super(FullyConnectedMLP, self).__init__()
         self.rot_size = rot_size
         self.scale_size = scale_size
         self.xyz_size = xyz_size
+        self.intermediate_size = intermediate_size
+        self.embedding_dim = embedding_dim
+        self.expr_dim = expr_dim
         layers = []
         output_size = rot_size + scale_size + xyz_size
 
@@ -42,17 +53,59 @@ class FullyConnectedMLP(nn.Module):
             layers.append(nn.ReLU())
 
         # Output layer
-        layers.append(nn.Linear(hidden_size, output_size))
+        layers.append(nn.Linear(hidden_size, intermediate_size))
 
         # Combine all layers
         self.layers = nn.Sequential(*layers)
 
-    def forward(self, x):
-        output = self.layers(x)
-        del_rot = output[:,:4]
-        del_scale = output[:,4:7]
-        del_scale = output[:,4:7]
-        return 
+        self.rot_head = nn.Linear(intermediate_size, rot_size)
+        self.scale_head = nn.Linear(intermediate_size, scale_size)
+        self.xyz_head = nn.Linear(intermediate_size, xyz_size)
+
+    @static_method
+    def positional_encoding(x, L):
+        out = [x]
+
+        for j in range(L):
+            out.append(torch.sin(2**j * x))
+            out.append(torch.cos(2**j * x))
+        return torch.cat(out, dim=1)
+
+    def forward(self, canonical_template, expr_code):
+        """
+        canonical_xyz: (N,3)
+        expr_code: (B, 100)
+
+        """
+        
+        batch_size = expr_code.shape[0]
+        # canonical_xyz_features is of shape (N, num_pos_encodings)
+        canonical_xyz_features = positional_encoding(canonical_template, self.embedding_dim)
+        canonical_xyz_features = canonical.unsqueeze(0)
+        # now it is of shape (B, N, num_pos_encodings)
+        canonical_xyz_features = canonical_xyz_features.repeat(batch_size, 1, 1)
+
+        expr_code = expr_code.unsqueeze(1)
+        #of shape (B,N, expr_code)
+        expr_code = expr.repeat(1, canonical_xyz_features.shape[1], 1)
+
+        # x will be of shape (B, N, expr_code+num_pose_encodings)
+        x = torch.cat([canonical_xyz_features,expr_code ], dim=2)
+        # x will be of shape (B*N, expr_code+num_pose_encodings)
+        x = x.view(batch_size, -1)
+
+        x = self.layers(x)
+        del_rot = self.rot_head(x)
+        del_rot = del_rot.view(batch_size,-1, self.rot_size) # eg. (B,N,4)
+        
+        del_scale = self.scale_head(x)
+        del_scale = del_scale.view(batch_size, -1, self.scale_size) # eg. (B,N,3)
+        
+        del_xyz = self.xyz_head(x)
+        del_xyz = del_xyz.view(batch_size, -1, self.xyz_size) # eg. (B,N,3)
+
+        return del_xyz, del_scale, del_rot
+
 
 
 class GaussianModelFace:
@@ -91,8 +144,11 @@ class GaussianModelFace:
         self.optimizer = None
         self.percent_dense = 0
         self.spatial_lr_scale = 0
+        
+        self.delta_mlp_model = None
+
         self.setup_functions()
-        self.
+        # self.
 
     def capture(self):
         return (
@@ -215,6 +271,8 @@ class GaussianModelFace:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
+        self.delta_mlp_model = FullyConnectedMLP()
+        self.
 
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
