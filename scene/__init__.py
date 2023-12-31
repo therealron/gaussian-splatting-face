@@ -75,7 +75,7 @@ class Scene:
             print("Loading Training Cameras")
             # import pdb; pdb.set_trace();
             # self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
-            curr_cam_infos = readCamerasFromTransforms("/content/gaussian-splatting-face/scene/justin", "transforms.json", True, "")
+            curr_cam_infos = readCamerasFromTransforms("/content/gaussian-splatting-face/scene/justin", "transforms_one.json", True, "")
             self.train_cameras[resolution_scale] = cameraList_from_camInfos(curr_cam_infos, resolution_scale, args)
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
