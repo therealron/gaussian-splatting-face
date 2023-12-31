@@ -157,6 +157,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             img2 = gt_image.cpu()
             img = torch.cat([img1, img2], dim=1)
             checkpoint_img_path = f'/content/gaussian-splatting-face/checkpoint_img_{iteration}.jpeg'
+            import pdb; pdb.set_trace();
             torchvision.io.write_jpeg(img, checkpoint_img_path)
             print("Wrote ",checkpoint_img_path)
             # torch
