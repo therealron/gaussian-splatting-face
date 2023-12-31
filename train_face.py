@@ -152,7 +152,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # gaussians.mlp_optimizer.zero_grad(set_to_none = True)
         gaussians.optimizer.zero_grad(set_to_none = True)
         
-        if iteration % 10000:
+        if iteration % 10000 ==0:
             img1 = image.cpu().detach()
             img2 = gt_image.cpu()
             img = torch.cat([img1, img2], dim=1)
