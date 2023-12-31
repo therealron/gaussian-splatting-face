@@ -50,10 +50,8 @@ class ViewCamera:
     self.znear = 0.01
     self.camera_center = torch.tensor(self.c2w[:3, 3], dtype=torch.float32).cuda()
     self.full_proj_transform = getProjectionMatrix(self.znear, self.zfar, self.FoVx, self.FoVy).transpose(0,1).cuda()
-
-
-
-
+    self.original_image = torchvision.io.read_image('/content/gaussian-splatting-face/scene/justin/canonical.obj')
+    self.original_image = self.original_image[:3,:,:].to(torch.float32).cuda()
 
 def read_expr(file_path):
     # Path to your text file
