@@ -95,8 +95,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tracked_mesh_v, tracked_mesh_f = igl.read_triangle_mesh('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
     print("tracked_mesh_v.shape = ",tracked_mesh.shape)
-    mm_to_m = 1e3
-    tracked_mesh = tracked_mesh * mm_to_m
+    m_to_mm = 1e3
+    tracked_mesh = tracked_mesh * m_to_mm
     tracked_mesh = torch.tensor(tracked_mesh, dtype=torch.float32)
     tracked_mesh = tracked_mesh.cuda()
     torch.autograd.set_detect_anomaly(True)
