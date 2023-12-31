@@ -79,7 +79,7 @@ class FullyConnectedMLP(nn.Module):
         expr_code: (1, 100)
 
         """
-        print("self.input_size = ",self.input_size)
+        # print("self.input_size = ",self.input_size)
         
         
         batch_size = expr_code.shape[0]
@@ -98,7 +98,7 @@ class FullyConnectedMLP(nn.Module):
         x = torch.cat([canonical_xyz_features.cuda(),expr_code.cuda() ], dim=2)
         # x will be of shape (B*N, expr_code+num_pose_encodings)
         x = x.view(-1, self.input_size )
-        print("x.shape = ",x.shape)
+        # print("x.shape = ",x.shape)
 
         intermediate_output = self.layers(x)
 
@@ -240,7 +240,7 @@ class GaussianModelFace:
         features[:, :3, 0 ] = fused_color
         features[:, 3:, 1:] = 0.0
 
-        print("Number of points at initialisation : ", fused_point_cloud.shape[0])
+        # print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
@@ -269,7 +269,7 @@ class GaussianModelFace:
         # features[:, :3, 0 ] = fused_color
         features[:, 3:, 1:] = 0.0
 
-        print("Number of points at initialisation : ", v.shape[0])
+        # print("Number of points at initialisation : ", v.shape[0])
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(v).float().cuda()), 0.0000001)
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
@@ -306,19 +306,19 @@ class GaussianModelFace:
         # print("del_rot.shape = ",del_rot.shape)
         # print("del_scale.shape = ",del_scale.shape)
 
-        print("del_u.dtype = ",del_u.dtype)
-        print("del_scale.dtype = ",del_scale.dtype)
-        print("del_rot.dtype = ",del_rot.dtype)
+        # print("del_u.dtype = ",del_u.dtype)
+        # print("del_scale.dtype = ",del_scale.dtype)
+        # print("del_rot.dtype = ",del_rot.dtype)
         # import pdb; pdb.set_trace();
         self._xyz = tracked_mesh + del_u[0]
         # self._rotation += del_rot[0]
         self._final_rotation = self._rotation + del_rot[0]
         self._final_scale = self._scaling + del_scale[0]
 
-        print("del_u.dtype = ",del_u.dtype)
-        print("del_scale.dtype a= ",del_scale.dtype)
-        print("del_rot.dtype = ",del_rot.dtype)
-        print("self._xyz.dtype = ",self._xyz.dtype)
+        # print("del_u.dtype = ",del_u.dtype)
+        # print("del_scale.dtype a= ",del_scale.dtype)
+        # print("del_rot.dtype = ",del_rot.dtype)
+        # print("self._xyz.dtype = ",self._xyz.dtype)
 
 
 
