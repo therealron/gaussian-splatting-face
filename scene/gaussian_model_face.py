@@ -9,6 +9,7 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
+from sys import implementation
 import torch
 import numpy as np
 from utils.general_utils import inverse_sigmoid, get_expon_lr_func, build_rotation
@@ -99,15 +100,21 @@ class FullyConnectedMLP(nn.Module):
         x = x.view(-1, self.input_size )
         print("x.shape = ",x.shape)
 
-        x = self.layers(x)
-        del_rot = self.rot_head(x)
+        intermediate_output = self.layers(x)
+
+        # import pdb
+
+        del_rot = self.rot_head(intermediate_output)
         del_rot = del_rot.view(batch_size,-1, self.rot_size) # eg. (B,N,4)
         
-        del_scale = self.scale_head(x)
+        del_scale = self.scale_head(intermediate_output)
         del_scale = del_scale.view(batch_size, -1, self.scale_size) # eg. (B,N,3)
         
-        del_xyz = self.xyz_head(x)
+        del_xyz = self.xyz_head(intermediate_output)
         del_xyz = del_xyz.view(batch_size, -1, self.xyz_size) # eg. (B,N,3)
+
+        # del_scale = del_xyz.to(torch.float32)
+        
         
         return del_xyz.to(torch.float32), del_scale, del_rot
 
@@ -151,6 +158,8 @@ class GaussianModelFace:
         self.spatial_lr_scale = 0
         self.delta_mlp_model = None
         self.mlp_optimizer = None
+        self._final_rotation = torch.empty(0)
+        self._final_scale = torch.empty(0)
         self.setup_functions()
         # self.
 
@@ -190,11 +199,11 @@ class GaussianModelFace:
 
     @property
     def get_scaling(self):
-        return self.scaling_activation(self._scaling)
+        return self.scaling_activation(self._final_scale)
     
     @property
     def get_rotation(self):
-        return self.rotation_activation(self._rotation)
+        return self.rotation_activation(self._final_rotation)
     
     @property
     def get_xyz(self):
@@ -277,8 +286,8 @@ class GaussianModelFace:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
-        self.delta_mlp_model = FullyConnectedMLP()
-        self.delta_mlp_model = self.delta_mlp_model.cuda()
+        self.delta_mlp_model = FullyConnectedMLP().cuda()
+        # self.delta_mlp_model = self.delta_mlp_model.cuda()
 
     def generate_dynamic_gaussians(self, tracked_mesh, flame_expr_params):
         """
@@ -286,6 +295,7 @@ class GaussianModelFace:
         tracked_mesh: (N,3)
         flame_expr_params: (1,100)
         """
+        
 
         assert tracked_mesh.shape[0] == self._canonical_xyz.shape[0] # assert that they have the same # vertices
         
@@ -299,13 +309,14 @@ class GaussianModelFace:
         print("del_u.dtype = ",del_u.dtype)
         print("del_scale.dtype = ",del_scale.dtype)
         print("del_rot.dtype = ",del_rot.dtype)
-        import pdb; pdb.set_trace();
+        # import pdb; pdb.set_trace();
         self._xyz = tracked_mesh + del_u[0]
-        self._rotation = self._rotation + del_rot[0]
-        self._scaling = self._scaling + del_scale[0]
+        # self._rotation += del_rot[0]
+        self._final_rotation = self._rotation + del_rot[0]
+        self._final_scale = self._scaling + del_scale[0]
 
         print("del_u.dtype = ",del_u.dtype)
-        print("del_scale.dtype = ",del_scale.dtype)
+        print("del_scale.dtype a= ",del_scale.dtype)
         print("del_rot.dtype = ",del_rot.dtype)
         print("self._xyz.dtype = ",self._xyz.dtype)
 
@@ -320,20 +331,22 @@ class GaussianModelFace:
         
 
         l = [
-            {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
+            # {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
             {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
             {'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0, "name": "f_rest"},
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
             {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
-            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
+            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
+            {'params': self.delta_mlp_model.parameters(), 'lr': 0.01, "name": "mlp"}
+
         ]
 
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
 
         # optim.Adam()
-        mlp_params = [{'params': self.delta_mlp_model.parameters(), 'lr': 0.01, "name": "mlp"}]
-
-        self.mlp_optimizer = torch.optim.Adam(mlp_params, lr=0.001,eps=1e-15)
+        # mlp_params = [{'params': self.delta_mlp_model.parameters(), 'lr': 0.01, "name": "mlp"}
+        # ]
+        # self.mlp_optimizer = torch.optim.Adam(mlp_params, lr=0.001,eps=1e-15)
 
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
@@ -350,11 +363,12 @@ class GaussianModelFace:
         
         # update the lr of the mlp model
         if iteration > 9999 and iteration%10000 == 0:
-            for param_group in self.mlp_optimizer.param_groups:
+            for param_group in self.optimizer.param_groups:
                 if param_group["name"] == "mlp":
                     lr = param_group['lr'] / 10
                     param_group['lr'] = lr
                     # return lr
+        return None
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
@@ -402,6 +416,7 @@ class GaussianModelFace:
         self._opacity = optimizable_tensors["opacity"]
 
     def load_ply(self, path):
+        raise NotImplementedError
         plydata = PlyData.read(path)
 
         xyz = np.stack((np.asarray(plydata.elements[0]["x"]),
@@ -445,6 +460,7 @@ class GaussianModelFace:
         self.active_sh_degree = self.max_sh_degree
 
     def replace_tensor_to_optimizer(self, tensor, name):
+        raise NotImplementedError
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
             if group["name"] == name:
@@ -495,6 +511,7 @@ class GaussianModelFace:
         self.max_radii2D = self.max_radii2D[valid_points_mask]
 
     def cat_tensors_to_optimizer(self, tensors_dict):
+        raise NotImplementedError
         optimizable_tensors = {}
         for group in self.optimizer.param_groups:
             assert len(group["params"]) == 1

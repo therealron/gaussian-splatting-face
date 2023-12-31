@@ -92,6 +92,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh = torch.tensor(tracked_mesh, dtype=torch.float32)
     tracked_mesh = tracked_mesh.cuda()
+    torch.autograd.set_detect_anomaly(True)
 
 
 
@@ -145,14 +146,18 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
-        loss.backward()
+        loss.backward(retain_graph=True)
+        gaussians.optimizer.step()
+        # gaussians.mlp_optimizer.step()
+        # gaussians.mlp_optimizer.zero_grad(set_to_none = True)
+        gaussians.optimizer.zero_grad(set_to_none = True)
+        
         
 
         iter_end.record()
 
         with torch.no_grad():
-            gaussians.mlp_optimizer.step()
-            gaussians.mlp_optimizer.zero_grad()
+            
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
             if iteration % 10 == 0:
@@ -179,12 +184,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 
                 # if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
                 if iteration % opt.opacity_reset_interval == 0 or dataset.white_background :
+                    print("here")
                     gaussians.reset_opacity()
 
             # Optimizer step
             if iteration < opt.iterations:
                 gaussians.optimizer.step()
                 gaussians.optimizer.zero_grad(set_to_none = True)
+            
 
             if (iteration in checkpoint_iterations):
                 print("\n[ITER {}] Saving Checkpoint".format(iteration))
