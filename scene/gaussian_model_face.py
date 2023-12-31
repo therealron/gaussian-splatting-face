@@ -331,7 +331,7 @@ class GaussianModelFace:
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
 
         # optim.Adam()
-        mlp_params = [{'params': [self.delta_mlp_model], 'lr': 0.01, "name": "mlp"}
+        mlp_params = [{'params': [self.delta_mlp_model.parameters()], 'lr': 0.01, "name": "mlp"}
         ]
         self.mlp_optimizer = torch.optim.Adam(mlp_params, lr=0.001,eps=1e-15)
 
