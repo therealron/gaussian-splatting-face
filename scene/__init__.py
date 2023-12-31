@@ -18,6 +18,7 @@ from scene.gaussian_model import GaussianModel
 from scene.gaussian_model_face import GaussianModelFace
 from arguments import ModelParams
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
+from scene.dataset_readers import readCamerasFromTransforms
 
 class Scene:
 
@@ -72,11 +73,15 @@ class Scene:
 
         for resolution_scale in resolution_scales:
             print("Loading Training Cameras")
-            self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
+            # import pdb; pdb.set_trace();
+            # self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
+            curr_cam_infos = readCamerasFromTransforms("/content/gaussian-splatting-face/scene/justin", "transforms.json", True, "")
+            self.train_cameras[resolution_scale] = cameraList_from_camInfos(curr_cam_infos, resolution_scale, args)
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
 
         if self.loaded_iter:
+            raise NotImplementedError
             self.gaussians.load_ply(os.path.join(self.model_path,
                                                            "point_cloud",
                                                            "iteration_" + str(self.loaded_iter),

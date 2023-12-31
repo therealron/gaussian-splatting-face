@@ -199,11 +199,13 @@ class GaussianModelFace:
 
     @property
     def get_scaling(self):
-        return self.scaling_activation(self._final_scale)
+        # return self.scaling_activation(self._final_scale)
+        return self.scaling_activation(self._scaling)
     
     @property
     def get_rotation(self):
-        return self.rotation_activation(self._final_rotation)
+        # return self.rotation_activation(self._final_rotation)
+        return self.rotation_activation(self._rotation)
     
     @property
     def get_xyz(self):
@@ -262,8 +264,9 @@ class GaussianModelFace:
         self.spatial_lr_scale = spatial_lr_scale
         assert os.path.exists(flame_canonical_path), flame_canonical_path+ " does not exist!"
         v, vt, _, faces, ftc, _ = igl.read_obj(flame_canonical_path)
+        mm_to_m = 1e3
         
-        fused_point_cloud = torch.tensor(v).float().cuda()
+        fused_point_cloud = torch.tensor(v * mm_to_m).float().cuda()
         # fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
         features = torch.zeros((v.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
         # features[:, :3, 0 ] = fused_color
@@ -278,15 +281,14 @@ class GaussianModelFace:
 
         opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
 
-        self._canonical_xyz = fused_point_cloud
-        
+        self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
         self._features_rest = nn.Parameter(features[:,:,1:].transpose(1, 2).contiguous().requires_grad_(True))
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_canonical_xyz.shape[0]), device="cuda")
-        self.delta_mlp_model = FullyConnectedMLP().cuda()
+        # self.delta_mlp_model = FullyConnectedMLP().cuda()
         # self.delta_mlp_model = self.delta_mlp_model.cuda()
 
     def generate_dynamic_gaussians(self, tracked_mesh, flame_expr_params):
@@ -320,10 +322,6 @@ class GaussianModelFace:
         # print("del_rot.dtype = ",del_rot.dtype)
         # print("self._xyz.dtype = ",self._xyz.dtype)
 
-
-
-        
-
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
         self.xyz_gradient_accum = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
@@ -331,21 +329,20 @@ class GaussianModelFace:
         
 
         l = [
-            # {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
+            {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
             {'params': [self._features_dc], 'lr': training_args.feature_lr, "name": "f_dc"},
             {'params': [self._features_rest], 'lr': training_args.feature_lr / 20.0, "name": "f_rest"},
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
             {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
-            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
-            {'params': self.delta_mlp_model.parameters(), 'lr': 0.01, "name": "mlp"}
-
+            {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"}
+            # {'params': self.delta_mlp_model.parameters(), 'lr': 0.01, "name": "mlp"}
         ]
 
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
 
         # optim.Adam()
         # mlp_params = [{'params': self.delta_mlp_model.parameters(), 'lr': 0.01, "name": "mlp"}
-        # ]
+        # ]/
         # self.mlp_optimizer = torch.optim.Adam(mlp_params, lr=0.001,eps=1e-15)
 
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
@@ -362,11 +359,11 @@ class GaussianModelFace:
                 # return lr
         
         # update the lr of the mlp model
-        if iteration > 9999 and iteration%10000 == 0:
-            for param_group in self.optimizer.param_groups:
-                if param_group["name"] == "mlp":
-                    lr = param_group['lr'] / 10
-                    param_group['lr'] = lr
+        # if iteration > 9999 and iteration%10000 == 0:
+        #     for param_group in self.optimizer.param_groups:
+        #         if param_group["name"] == "mlp":
+        #             lr = param_group['lr'] / 10
+        #             param_group['lr'] = lr
                     # return lr
         return None
 
@@ -385,9 +382,11 @@ class GaussianModelFace:
         return l
 
     def save_ply(self, path):
+        print("not saving ply")
+        return
         mkdir_p(os.path.dirname(path))
 
-        canonical_xyz = self.canonical_xyz.detach().cpu().numpy()
+        canonical_xyz = self._canonical_xyz.detach().cpu().numpy()
         normals = np.zeros_like(canonical_xyz)
         f_dc = self._features_dc.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
         f_rest = self._features_rest.detach().transpose(1, 2).flatten(start_dim=1).contiguous().cpu().numpy()
@@ -397,8 +396,8 @@ class GaussianModelFace:
 
         dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
 
-        elements = np.empty(xyz.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+        elements = np.empty(canonical_xyz.shape[0], dtype=dtype_full)
+        attributes = np.concatenate((canonical_xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)

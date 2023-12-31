@@ -25,6 +25,7 @@ from tqdm import tqdm
 from utils.image_utils import psnr
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
+from scene.dataset_readers import readCamerasFromTransforms
 try:
     from torch.utils.tensorboard import SummaryWriter
     TENSORBOARD_FOUND = True
@@ -34,8 +35,8 @@ except ImportError:
 from utils.graphics_utils import getProjectionMatrix
 class ViewCamera:
   def __init__(self):
-    self.FoVx = 0.2225811228028787
-    self.FoVy = 0.2225811228028787
+    self.FovX = 0.2225811228028787
+    self.FovY = 0.2225811228028787
     self.image_height = 512
     self.image_width = 512
     self.c2w = np.array([[0.9994248320452279,-0.03332750212378886,0.0062736968987590225,-0.016231912076032987],
@@ -90,9 +91,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     print()# /content/gaussian-splatting-face
     expr = read_expr('/content/gaussian-splatting-face/scene/justin/flame/expr/00000.txt')
     tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
-    tracked_mesh = torch.tensor(tracked_mesh, dtype=torch.float32)
+    mm_to_m = 1e3
+    tracked_mesh = torch.tensor(tracked_mesh * mm_to_m, dtype=torch.float32)
     tracked_mesh = tracked_mesh.cuda()
     torch.autograd.set_detect_anomaly(True)
+
+    # curr_cam_infos = readCamerasFromTransforms("/content/gaussian-splatting-face/scene/justin", "transforms.json", True, "")
+    # import pdb; pdb.set_trace();
 
 
 
@@ -130,35 +135,48 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         
-        gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
-        # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        viewpoint_cam = ViewCamera()
+        # gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
+        viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        # import pdb; pdb.set_trace();
+        # viewpoint_cam = ViewCamera()
+        # viewpoint_cam = curr_cam_infos[0]
 
 
 
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
+
+        # print("background = ",background)
+        background = torch.zeros_like(background) + 1.0
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+        image = image * 255.0
 
         # Loss
-        gt_image = viewpoint_cam.original_image.cuda()
+        gt_image = viewpoint_cam.original_image.cuda() 
+        gt_image = gt_image * 255.0
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         loss.backward()
-        gaussians.optimizer.step()
-        # gaussians.mlp_optimizer.step()
-        # gaussians.mlp_optimizer.zero_grad(set_to_none = True)
-        gaussians.optimizer.zero_grad(set_to_none = True)
         
-        if iteration % 10000 ==0:
+        # self.mlp_optimizer
+        
+        if iteration % 5000 ==0:
             img1 = image.cpu().detach()
+            print("img1.max() = ",img1.max())
+            print("img1.min() = ",img1.min())
             img2 = gt_image.cpu()
+            print("img2.max() = ",img2.max())
+            print("img2.min() = ",img2.min())
             img = torch.cat([img1, img2], dim=1)
             checkpoint_img_path = f'/content/gaussian-splatting-face/checkpoint_img_{iteration}.jpeg'
             # import pdb; pdb.set_trace();
-            torchvision.io.write_jpeg(img.to(torch.uint8), checkpoint_img_path)
+            img = img.to(torch.uint8)
+            print("img.max() = ",img.max())
+            print("img.min() = ",img.min())
+            # checkpoint_img_path
+            torchvision.io.write_jpeg(img , checkpoint_img_path)
             print("Wrote ",checkpoint_img_path)
             # torch
 
@@ -176,12 +194,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
-            if (iteration in saving_iterations):
-                print("\n[ITER {}] Saving Gaussians".format(iteration))
-                scene.save(iteration)
+            # if (iteration in saving_iterations):
+            #     print("\n[ITER {}] Saving Gaussians".format(iteration))
+            #     scene.save(iteration)
 
             # Densification
-            if iteration < opt.densify_until_iter:
+            # if iteration < opt.densify_until_iter:
                 # # Keep track of max radii in image-space for pruning
                 # gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
                 # gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
@@ -191,13 +209,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 #     gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
                 
                 # if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                if iteration % opt.opacity_reset_interval == 0 or dataset.white_background :
-                    print("here")
-                    gaussians.reset_opacity()
+                # if iteration % opt.opacity_reset_interval == 0 or dataset.white_background :
+                #     print("here")
+                #     gaussians.reset_opacity()
 
             # Optimizer step
             if iteration < opt.iterations:
+                # gaussians.optimizer.step()
+                # gaussians.optimizer.zero_grad(set_to_none = True)
                 gaussians.optimizer.step()
+                # gaussians.mlp_optimizer.step()
+                # gaussians.mlp_optimizer.zero_grad(set_to_none = True)
                 gaussians.optimizer.zero_grad(set_to_none = True)
             
 
