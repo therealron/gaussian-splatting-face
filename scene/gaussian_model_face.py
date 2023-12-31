@@ -334,7 +334,7 @@ class GaussianModelFace:
         
         self._xyz = tracked_mesh + del_u[0]
         # self._rotation += del_rot[0]
-        self._final_rotation = self._rotation # + del_rot[0]
+        self._final_rotation = self._rotation + del_rot[0]
         self._final_scale = self._scaling + del_scale[0]
 
         # print("del_u.dtype = ",del_u.dtype)

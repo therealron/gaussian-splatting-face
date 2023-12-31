@@ -158,7 +158,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         mask = mask != 0
         mask = mask.to(torch.int32).cuda()
         # import pdb; pdb.set_trace();
-        background = torch.zeros_like(background) + 1.0
+        # background = torch.zeros_like(background) + 1.0
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
         image = image * 255.0 * mask
