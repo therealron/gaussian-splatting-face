@@ -8,8 +8,9 @@
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
-
+import torchvision
 import os
+from re import I
 import igl
 import torch
 from random import randint
@@ -92,7 +93,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     expr = read_expr('/content/gaussian-splatting-face/scene/justin/flame/expr/00000.txt')
     tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     mm_to_m = 1e3
-    tracked_mesh = torch.tensor(tracked_mesh * mm_to_m, dtype=torch.float32)
+    tracked_mesh = tracked_mesh * mm_to_m
+    tracked_mesh = torch.tensor(tracked_mesh, dtype=torch.float32)
     tracked_mesh = tracked_mesh.cuda()
     torch.autograd.set_detect_anomaly(True)
 
@@ -135,7 +137,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         
-        # gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
+        gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         # import pdb; pdb.set_trace();
         # viewpoint_cam = ViewCamera()
@@ -146,12 +148,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # Render
         if (iteration - 1) == debug_from:
             pipe.debug = True
+        
+        mask = torchvision.io.read_image('/content/gaussian-splatting-face/scene/justin/rgb_0.png')[3:,:,:]
 
-        # print("background = ",background)
+        # print("mask.shape = ",mask.shape)
+        mask = mask != 0
+        mask = mask.to(torch.int32).cuda()
+        # import pdb; pdb.set_trace();
         background = torch.zeros_like(background) + 1.0
         render_pkg = render(viewpoint_cam, gaussians, pipe, background)
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
-        image = image * 255.0
+        image = image * 255.0 * mask
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda() 
