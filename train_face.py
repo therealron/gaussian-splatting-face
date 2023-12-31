@@ -94,7 +94,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     # tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh_v, tracked_mesh_f = igl.read_triangle_mesh('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
-    print("tracked_mesh_v.shape = ",tracked_mesh_v.shape)
+    print("tracked_mesh_v.shape = ",tracked_mesh.shape)
     mm_to_m = 1e3
     tracked_mesh = tracked_mesh * mm_to_m
     tracked_mesh = torch.tensor(tracked_mesh, dtype=torch.float32)
@@ -140,7 +140,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if not viewpoint_stack:
             viewpoint_stack = scene.getTrainCameras().copy()
         
-        gaussians.generate_dynamic_gaussians(tracked_mesh_v, expr)
+        gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         # import pdb; pdb.set_trace();
         # viewpoint_cam = ViewCamera()
