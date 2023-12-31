@@ -94,6 +94,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     # tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh_v, tracked_mesh_f = igl.read_triangle_mesh('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh_v, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
+    tracked_mesh_v, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
+    tracked_mesh_v, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
     tracked_mesh, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
     print("tracked_mesh_v.shape = ",tracked_mesh.shape)
     m_to_mm = 1e3
