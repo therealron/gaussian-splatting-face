@@ -52,7 +52,7 @@ def render(viewpoint_camera, pc : GaussianModelFace, pipe, bg_color : torch.Tens
     # old_viewpoint_camera = viewpoint_camera
     # viewpoint_camera = ViewCamera()
     # viewpoint_camera.
-    import pdb; pdb.set_trace();
+    # import pdb; pdb.set_trace();
     try:
         screenspace_points.retain_grad()
     except:
