@@ -302,6 +302,25 @@ class GaussianModelFace:
         norm = torch.norm(q, p=2, dim=-1, keepdim=True)
         return q / norm
 
+    
+    def multiply_quaternions(self, q1, q2):
+        """
+        Multiplies two batches of quaternions.
+        q1, q2: Tensors of shape (B, 4)
+        """
+        # Extract components
+        w1, x1, y1, z1 = q1[:, 0], q1[:, 1], q1[:, 2], q1[:, 3]
+        w2, x2, y2, z2 = q2[:, 0], q2[:, 1], q2[:, 2], q2[:, 3]
+
+        # Calculate the product
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+
+        # Combine components into a single tensor
+        return torch.stack((w, x, y, z), dim=1)
+
     def generate_dynamic_gaussians(self, tracked_mesh, flame_expr_params):
         """
         in each iteration just pass a single mesh
@@ -334,7 +353,8 @@ class GaussianModelFace:
         
         self._xyz = tracked_mesh + del_u[0]
         # self._rotation += del_rot[0]
-        self._final_rotation = self._rotation + del_rot[0]
+        # self._final_rotation = self._rotation + del_rot[0]
+        self._final_rotation = self.multiply_quaternions(self._rotation, del_rot[0])
         self._final_scale = self._scaling + del_scale[0]
 
         # print("del_u.dtype = ",del_u.dtype)
