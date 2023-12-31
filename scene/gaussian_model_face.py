@@ -150,6 +150,7 @@ class GaussianModelFace:
         self.percent_dense = 0
         self.spatial_lr_scale = 0
         self.delta_mlp_model = None
+        self.mlp_optimizer = None
         self.setup_functions()
         # self.
 
@@ -316,6 +317,7 @@ class GaussianModelFace:
         self.percent_dense = training_args.percent_dense
         self.xyz_gradient_accum = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
         self.denom = torch.zeros((self.get_canonical_xyz.shape[0], 1), device="cuda")
+        
 
         l = [
             {'params': [self._xyz], 'lr': training_args.position_lr_init * self.spatial_lr_scale, "name": "xyz"},
@@ -327,6 +329,12 @@ class GaussianModelFace:
         ]
 
         self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+
+        # optim.Adam()
+        mlp_params = [{'params': [self.delta_mlp_model], 'lr': 0.01, "name": "mlp"}
+        ]
+        self.mlp_optimizer = torch.optim.Adam(mlp_params, lr=0.001,eps=1e-15)
+
         self.xyz_scheduler_args = get_expon_lr_func(lr_init=training_args.position_lr_init*self.spatial_lr_scale,
                                                     lr_final=training_args.position_lr_final*self.spatial_lr_scale,
                                                     lr_delay_mult=training_args.position_lr_delay_mult,
@@ -338,7 +346,15 @@ class GaussianModelFace:
             if param_group["name"] == "xyz":
                 lr = self.xyz_scheduler_args(iteration)
                 param_group['lr'] = lr
-                return lr
+                # return lr
+        
+        # update the lr of the mlp model
+        if iteration > 9999 and iteration%10000 == 0:
+            for param_group in self.mlp_optimizer.param_groups:
+                if param_group["name"] == "mlp":
+                    lr = param_group['lr'] / 10
+                    param_group['lr'] = lr
+                    # return lr
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
