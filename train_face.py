@@ -152,7 +152,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if (iteration - 1) == debug_from:
             pipe.debug = True
         
-        mask = torchvision.io.read_image('/content/gaussian-splatting-face/scene/justin/rgb_0.png')[3:,:,:]
+        mask = torchvision.io.read_image('/content/gaussian-splatting-face/scene/justin/images/00000.png')[3:,:,:]
 
         # print("mask.shape = ",mask.shape)
         mask = mask != 0
