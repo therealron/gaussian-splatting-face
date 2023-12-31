@@ -152,7 +152,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         # gaussians.mlp_optimizer.zero_grad(set_to_none = True)
         gaussians.optimizer.zero_grad(set_to_none = True)
         
-        
+        if iteration % 10000:
+            img1 = image.cpu().detach()
+            img2 = gt_image.cpu()
+            img = torch.cat([img1, img2], dim=1)
+            checkpoint_img_path = f'/content/gaussian-splatting-face/checkpoint_img_{iteration}.jpeg'
+            torchvision.io.write_jpeg(img, checkpoint_img_path)
+            print("Wrote ",checkpoint_img_path)
+            # torch
 
         iter_end.record()
 
