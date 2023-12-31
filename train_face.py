@@ -152,7 +152,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         with torch.no_grad():
             gaussians.mlp_optimizer.step()
-            gaussians.mlp_optimizer.zero_grad()
+            gaussians.mlp_optimizer.zero_grad(set_to_none = True)
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
             if iteration % 10 == 0:
