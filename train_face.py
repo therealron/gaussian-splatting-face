@@ -146,7 +146,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
-        loss.backward(retain_graph=True)
+        loss.backward()
         gaussians.optimizer.step()
         # gaussians.mlp_optimizer.step()
         # gaussians.mlp_optimizer.zero_grad(set_to_none = True)
