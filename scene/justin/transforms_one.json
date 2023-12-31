@@ -10,6 +10,7 @@
             "depth_path": "depth/00000.png",
             "exp_path": "flame/exp/00000.txt",
             "eyes_path": "flame/eyes/00000.txt",
+            
             "file_path": "images/00000.png",
             "mesh_path": "meshes/00000.obj",
             "seg_mask_path": "seg_mask/00000.png",
