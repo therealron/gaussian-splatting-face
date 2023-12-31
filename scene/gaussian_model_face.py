@@ -266,6 +266,7 @@ class GaussianModelFace:
         # v, vt, _, faces, ftc, _ = igl.read_obj(flame_canonical_path)
         v, faces = igl.read_triangle_mesh(flame_canonical_path)
         v, faces = igl.upsample(v, faces)
+        v, faces = igl.upsample(v, faces)
         print("canonical xyz shape = ",v.shape)
         mm_to_m = 1e3
         v = v * mm_to_m

@@ -93,6 +93,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     expr = read_expr('/content/gaussian-splatting-face/scene/justin/flame/expr/00000.txt')
     # tracked_mesh, _, _, _, _, _ = igl.read_obj('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
     tracked_mesh_v, tracked_mesh_f = igl.read_triangle_mesh('/content/gaussian-splatting-face/scene/justin/mesh_0.obj')
+    tracked_mesh_v, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
     tracked_mesh, tracked_mesh_f = igl.upsample(tracked_mesh_v, tracked_mesh_f)
     print("tracked_mesh_v.shape = ",tracked_mesh.shape)
     m_to_mm = 1e3
@@ -142,6 +143,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         
         gaussians.generate_dynamic_gaussians(tracked_mesh, expr)
         viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        
         # import pdb; pdb.set_trace();
         # viewpoint_cam = ViewCamera()
         # viewpoint_cam = curr_cam_infos[0]
@@ -167,7 +169,8 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         gt_image = viewpoint_cam.original_image.cuda() 
         gt_image = gt_image * 255.0
         Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        # loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        loss =  Ll1 # + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
         loss.backward()
         
         # self.mlp_optimizer
