@@ -263,7 +263,10 @@ class GaussianModelFace:
         
         self.spatial_lr_scale = spatial_lr_scale
         assert os.path.exists(flame_canonical_path), flame_canonical_path+ " does not exist!"
-        v, vt, _, faces, ftc, _ = igl.read_obj(flame_canonical_path)
+        # v, vt, _, faces, ftc, _ = igl.read_obj(flame_canonical_path)
+        v, faces = igl.read_triangle_mesh(flame_canonical_path)
+        v, faces = igl.upsample(v, faces)
+        print("canonical xyz shape = ",v.shape)
         mm_to_m = 1e3
         v = v * mm_to_m
         
@@ -277,6 +280,7 @@ class GaussianModelFace:
         # print("Number of points at initialisation : ", v.shape[0])
 
         dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(v).float().cuda()), 0.0000001)
+        
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
         rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
         rots[:, 0] = 1
@@ -293,6 +297,11 @@ class GaussianModelFace:
         self.delta_mlp_model = FullyConnectedMLP().cuda()
         self.delta_mlp_model = self.delta_mlp_model.cuda()
 
+
+    def normalize_quaternion(self, q):
+        norm = torch.norm(q, p=2, dim=-1, keepdim=True)
+        return q / norm
+
     def generate_dynamic_gaussians(self, tracked_mesh, flame_expr_params):
         """
         in each iteration just pass a single mesh
@@ -304,19 +313,28 @@ class GaussianModelFace:
         assert tracked_mesh.shape[0] == self._canonical_xyz.shape[0] # assert that they have the same # vertices
         
         assert flame_expr_params.shape[0] == 1 and flame_expr_params.shape[1]==100
+
         
         del_u, del_scale, del_rot = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
         # print("del_u.shape = ",del_u.shape)
         # print("del_rot.shape = ",del_rot.shape)
         # print("del_scale.shape = ",del_scale.shape)
 
-        # print("del_u.dtype = ",del_u.dtype)
+        # normalized_del_rot 
+
+        # random_number = random.randint(1, 100)
+        # print("del_u.max() = ",del_u.max())
+        # print("del_scale.max() = ",del_scale.max())
+        # print("del_rot.max() = ",del_rot.max())
+        # import pdb; pdb.set_trace();
+        
         # print("del_scale.dtype = ",del_scale.dtype)
         # print("del_rot.dtype = ",del_rot.dtype)
         # import pdb; pdb.set_trace();
+        
         self._xyz = tracked_mesh + del_u[0]
         # self._rotation += del_rot[0]
-        self._final_rotation = self._rotation + del_rot[0]
+        self._final_rotation = self._rotation # + del_rot[0]
         self._final_scale = self._scaling + del_scale[0]
 
         # print("del_u.dtype = ",del_u.dtype)
@@ -337,7 +355,7 @@ class GaussianModelFace:
             {'params': [self._opacity], 'lr': training_args.opacity_lr, "name": "opacity"},
             {'params': [self._scaling], 'lr': training_args.scaling_lr, "name": "scaling"},
             {'params': [self._rotation], 'lr': training_args.rotation_lr, "name": "rotation"},
-            {'params': self.delta_mlp_model.parameters(), 'lr': 0.00001, "name": "mlp"}
+            {'params': self.delta_mlp_model.parameters(), 'lr': 0.00016, "name": "mlp"}
         ]
 
         self.optimizer = torch.optim.Adam(l, lr=0.001, eps=1e-15)
