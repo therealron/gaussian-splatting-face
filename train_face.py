@@ -19,7 +19,7 @@ import sys
 import numpy as np
 from scene import Scene, GaussianModelFace
 from utils.general_utils import safe_state
-
+import torchvision
 import uuid
 from tqdm import tqdm
 from utils.image_utils import psnr
