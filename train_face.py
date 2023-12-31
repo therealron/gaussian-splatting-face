@@ -19,7 +19,7 @@ import sys
 import numpy as np
 from scene import Scene, GaussianModelFace
 from utils.general_utils import safe_state
-from utils.graphics_utils import getProjectionMatrix
+
 import uuid
 from tqdm import tqdm
 from utils.image_utils import psnr
@@ -31,6 +31,7 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
+from utils.graphics_utils import getProjectionMatrix
 class ViewCamera:
   def __init__(self):
     self.FoVx = 0.2225811228028787
@@ -43,12 +44,12 @@ class ViewCamera:
             [0.0,0.0,0.0,1.0]
           ])
     self.w2c = np.linalg.inv(self.c2w)
-    self.world_view_transform = torch.tensor(self.w2c, dtype=torch.float32)
+    self.world_view_transform = torch.tensor(self.w2c, dtype=torch.float32).cuda()
     
     self.zfar = 100.0
     self.znear = 0.01
-    self.camera_center = torch.tensor(self.c2w[:3, 3], dtype=torch.float32)
-    self.full_proj_transform = getProjectionMatrix(self.znear, self.zfar, self.FoVx, self.FoVy)
+    self.camera_center = torch.tensor(self.c2w[:3, 3], dtype=torch.float32).cuda()
+    self.full_proj_transform = getProjectionMatrix(self.znear, self.zfar, self.FoVx, self.FoVy).transpose(0,1).cuda()
 
 
 
