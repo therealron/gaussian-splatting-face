@@ -336,7 +336,7 @@ class GaussianModelFace:
         
         assert flame_expr_params.shape[0] == 1 and flame_expr_params.shape[1]==100
 
-        if canonical_template.shape[0]<1e6:
+        if self._canonical_xyz.shape[0]<1e6:
             del_u, del_scale, del_rot = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
             self._xyz = tracked_mesh + del_u[0]
             # self._rotation += del_rot[0]
