@@ -268,7 +268,7 @@ class GaussianModelFace:
         v, faces = igl.upsample(v, faces)
         v, faces = igl.upsample(v, faces)
         v, faces = igl.upsample(v, faces)
-        v, faces = igl.upsample(v, faces)
+        # v, faces = igl.upsample(v, faces)
         print("canonical xyz shape = ",v.shape)
         mm_to_m = 1e3
         v = v * mm_to_m
