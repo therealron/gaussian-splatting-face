@@ -336,8 +336,37 @@ class GaussianModelFace:
         
         assert flame_expr_params.shape[0] == 1 and flame_expr_params.shape[1]==100
 
-        
-        del_u, del_scale, del_rot = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
+        if canonical_template.shape[0]<1e6:
+            del_u, del_scale, del_rot = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
+            self._xyz = tracked_mesh + del_u[0]
+            # self._rotation += del_rot[0]
+            # self._final_rotation = self._rotation + del_rot[0]
+            self._final_rotation = self.multiply_quaternions(self._rotation, del_rot[0])
+            self._final_scale = self._scaling + del_scale[0]
+        else:
+            # do them in three passes
+            # del_u_1, del_scale_1, del_rot_1 = self.delta_mlp_model(self._canonical_xyz, flame_expr_params)
+            num_vertices = self._canonical_xyz.shape[0]
+
+            # Calculate the size of each split
+            split_size = num_vertices // 3
+
+            # Split the mesh into three parts
+            split1 = self._canonical_xyz[:split_size, :]
+            split2 = self._canonical_xyz[split_size:2*split_size, :]
+            split3 = self._canonical_xyz[2*split_size:, :]
+
+            # Run the model on each part
+            del_u_1_part1, del_scale_1_part1, del_rot_1_part1 = self.delta_mlp_model(split1, flame_expr_params)
+            del_u_1_part2, del_scale_1_part2, del_rot_1_part2 = self.delta_mlp_model(split2, flame_expr_params)
+            del_u_1_part3, del_scale_1_part3, del_rot_1_part3 = self.delta_mlp_model(split3, flame_expr_params)
+
+            # Concatenate the results back together
+            del_u_1 = torch.cat((del_u_1_part1, del_u_1_part2, del_u_1_part3), dim=0)
+            del_scale_1 = torch.cat((del_scale_1_part1, del_scale_1_part2, del_scale_1_part3), dim=0)
+            del_rot_1 = torch.cat((del_rot_1_part1, del_rot_1_part2, del_rot_1_part3), dim=0)
+            
+
         # print("del_u.shape = ",del_u.shape)
         # print("del_rot.shape = ",del_rot.shape)
         # print("del_scale.shape = ",del_scale.shape)
@@ -354,11 +383,7 @@ class GaussianModelFace:
         # print("del_rot.dtype = ",del_rot.dtype)
         # import pdb; pdb.set_trace();
         
-        self._xyz = tracked_mesh + del_u[0]
-        # self._rotation += del_rot[0]
-        # self._final_rotation = self._rotation + del_rot[0]
-        self._final_rotation = self.multiply_quaternions(self._rotation, del_rot[0])
-        self._final_scale = self._scaling + del_scale[0]
+        
 
         # print("del_u.dtype = ",del_u.dtype)
         # print("del_scale.dtype a= ",del_scale.dtype)
