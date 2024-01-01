@@ -362,9 +362,17 @@ class GaussianModelFace:
             del_u_1_part3, del_scale_1_part3, del_rot_1_part3 = self.delta_mlp_model(split3, flame_expr_params)
 
             # Concatenate the results back together
-            del_u_1 = torch.cat((del_u_1_part1, del_u_1_part2, del_u_1_part3), dim=0)
-            del_scale_1 = torch.cat((del_scale_1_part1, del_scale_1_part2, del_scale_1_part3), dim=0)
-            del_rot_1 = torch.cat((del_rot_1_part1, del_rot_1_part2, del_rot_1_part3), dim=0)
+            
+            del_u_1 = torch.cat((del_u_1_part1, del_u_1_part2, del_u_1_part3), dim=1)
+            del_scale_1 = torch.cat((del_scale_1_part1, del_scale_1_part2, del_scale_1_part3), dim=1)
+            del_rot_1 = torch.cat((del_rot_1_part1, del_rot_1_part2, del_rot_1_part3), dim=1)
+
+
+            self._xyz = tracked_mesh + del_u_1[0]
+            # self._rotation += del_rot[0]
+            # self._final_rotation = self._rotation + del_rot[0]
+            self._final_rotation = self.multiply_quaternions(self._rotation, del_rot_1[0])
+            self._final_scale = self._scaling + del_scale_1[0]
             
 
         # print("del_u.shape = ",del_u.shape)
