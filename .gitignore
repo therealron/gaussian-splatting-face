@@ -8,3 +8,8 @@ tensorboard_3d
 screenshots
 oryx-build-commands.txt
 venv/
+out/
+tandt/
+tandt_db.zip
+db/
+submodules/simple-knn

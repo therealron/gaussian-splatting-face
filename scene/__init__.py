@@ -74,9 +74,9 @@ class Scene:
         for resolution_scale in resolution_scales:
             print("Loading Training Cameras")
             # import pdb; pdb.set_trace();
-            # self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
-            curr_cam_infos = readCamerasFromTransforms("/content/gaussian-splatting-face/scene/justin", "transforms_one.json", True, "")
-            self.train_cameras[resolution_scale] = cameraList_from_camInfos(curr_cam_infos, resolution_scale, args)
+            self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, args)
+            # curr_cam_infos = readCamerasFromTransforms("/content/gaussian-splatting-face/scene/justin", "transforms_one.json", True, "")
+            # self.train_cameras[resolution_scale] = cameraList_from_camInfos(curr_cam_infos, resolution_scale, args)
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, args)
 
@@ -88,8 +88,8 @@ class Scene:
                                                            "point_cloud.ply"))
         else:
             print("using flame instead of pcd")
-            # self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
-            self.gaussians.create_from_flame(self.cameras_extent)
+            self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
+            # self.gaussians.create_from_flame(self.cameras_extent)
 
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
